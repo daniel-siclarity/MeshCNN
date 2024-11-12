@@ -11,7 +11,13 @@ if __name__ == '__main__':
     dataset_size = len(dataset)
     print('#training meshes = %d' % dataset_size)
 
-    model = create_model(opt)
+    if opt.dataset_mode == 'regression':
+        from models.mesh_regressor import RegressionModel
+        model = RegressionModel(opt)
+    else:
+        from models.mesh_classifier import ClassifierModel
+        model = ClassifierModel(opt)
+
     writer = Writer(opt)
     total_steps = 0
 

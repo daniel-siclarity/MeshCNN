@@ -12,7 +12,7 @@ class BaseOptions:
     def initialize(self):
         # data params
         self.parser.add_argument('--dataroot', required=True, help='path to meshes (should have subfolders train, test)')
-        self.parser.add_argument('--dataset_mode', choices={"classification", "segmentation"}, default='classification')
+        self.parser.add_argument('--dataset_mode', choices={"classification", "segmentation", "regression"}, default='classification')
         self.parser.add_argument('--ninput_edges', type=int, default=750, help='# of input edges (will include dummy edges)')
         self.parser.add_argument('--max_dataset_size', type=int, default=float("inf"), help='Maximum number of samples per epoch')
         # network params
@@ -36,6 +36,7 @@ class BaseOptions:
         # visualization params
         self.parser.add_argument('--export_folder', type=str, default='', help='exports intermediate collapses to this folder')
         #
+        self.parser.add_argument('--noutputs', type=int, default=1, help='Number of regression outputs')
         self.initialized = True
 
     def parse(self):
@@ -52,7 +53,10 @@ class BaseOptions:
                 self.opt.gpu_ids.append(id)
         # set gpu ids
         if len(self.opt.gpu_ids) > 0:
-            torch.cuda.set_device(self.opt.gpu_ids[0])
+            if torch.backends.mps.is_available():
+                torch.device("mps")
+            else:
+                torch.cuda.set_device(self.opt.gpu_ids[0])
 
         args = vars(self.opt)
 

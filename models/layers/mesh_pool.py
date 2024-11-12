@@ -40,13 +40,18 @@ class MeshPool(nn.Module):
 
     def __pool_main(self, mesh_index):
         mesh = self.__meshes[mesh_index]
+        # print(f"Processing mesh at index {mesh_index} with {mesh.edges_count} edges.")
         queue = self.__build_queue(self.__fe[mesh_index, :, :mesh.edges_count], mesh.edges_count)
         # recycle = []
         # last_queue_len = len(queue)
         last_count = mesh.edges_count + 1
-        mask = np.ones(mesh.edges_count, dtype=np.bool)
+        mask = np.ones(mesh.edges_count, dtype=np.bool_)
         edge_groups = MeshUnion(mesh.edges_count, self.__fe.device)
         while mesh.edges_count > self.__out_target:
+            if not queue:
+                print(f"Warning: Queue is empty during pooling at mesh index {mesh_index}.")
+                break  # Exit the loop if there are no more edges to collapse
+            
             value, edge_id = heappop(queue)
             edge_id = int(edge_id)
             if mask[edge_id]:

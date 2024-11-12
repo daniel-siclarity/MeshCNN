@@ -82,27 +82,33 @@ def init_weights(net, init_type, init_gain):
     net.apply(init_func)
 
 
-def init_net(net, init_type, init_gain, gpu_ids):
-    if len(gpu_ids) > 0:
-        assert(torch.cuda.is_available())
-        net.cuda(gpu_ids[0])
-        net = net.cuda()
-        net = torch.nn.DataParallel(net, gpu_ids)
-    if init_type != 'none':
-        init_weights(net, init_type, init_gain)
+def init_net(net, init_type='normal', init_gain=0.02, device=None):
+    if device is not None:
+        net.to(device)
+        if device.type == 'cuda' and torch.cuda.device_count() > 1:
+            net = torch.nn.DataParallel(net)
+    init_weights(net, init_type, init_gain)
     return net
 
 
-def define_classifier(input_nc, ncf, ninput_edges, nclasses, opt, gpu_ids, arch, init_type, init_gain):
+def define_classifier(input_nc, ncf, ninput_edges, nout, opt, gpu_ids, arch, init_type='normal', init_gain=0.02):
     net = None
     norm_layer = get_norm_layer(norm_type=opt.norm, num_groups=opt.num_groups)
 
     if arch == 'mconvnet':
-        net = MeshConvNet(norm_layer, input_nc, ncf, nclasses, ninput_edges, opt.pool_res, opt.fc_n,
-                          opt.resblocks)
+        net = MeshConvNet(
+            norm_layer=norm_layer,
+            nf0=input_nc,
+            conv_res=ncf,
+            noutputs=nout,
+            input_res=ninput_edges,
+            pool_res=opt.pool_res,
+            fc_n=opt.fc_n,
+            nresblocks=opt.resblocks
+        )
     elif arch == 'meshunet':
         down_convs = [input_nc] + ncf
-        up_convs = ncf[::-1] + [nclasses]
+        up_convs = ncf[::-1] + [nout]
         pool_res = [ninput_edges] + opt.pool_res
         net = MeshEncoderDecoder(pool_res, down_convs, up_convs, blocks=opt.resblocks,
                                  transfer_data=True)
@@ -115,6 +121,10 @@ def define_loss(opt):
         loss = torch.nn.CrossEntropyLoss()
     elif opt.dataset_mode == 'segmentation':
         loss = torch.nn.CrossEntropyLoss(ignore_index=-1)
+    elif opt.dataset_mode == 'regression':
+        loss = torch.nn.MSELoss()
+    else:
+        raise NotImplementedError('Loss not implemented for dataset mode [%s]' % opt.dataset_mode)
     return loss
 
 ##############################################################################
@@ -124,7 +134,7 @@ def define_loss(opt):
 class MeshConvNet(nn.Module):
     """Network for learning a global shape descriptor (classification)
     """
-    def __init__(self, norm_layer, nf0, conv_res, nclasses, input_res, pool_res, fc_n,
+    def __init__(self, norm_layer, nf0, conv_res, noutputs, input_res, pool_res, fc_n,
                  nresblocks=3):
         super(MeshConvNet, self).__init__()
         self.k = [nf0] + conv_res
@@ -140,7 +150,7 @@ class MeshConvNet(nn.Module):
         self.gp = torch.nn.AvgPool1d(self.res[-1])
         # self.gp = torch.nn.MaxPool1d(self.res[-1])
         self.fc1 = nn.Linear(self.k[-1], fc_n)
-        self.fc2 = nn.Linear(fc_n, nclasses)
+        self.fc2 = nn.Linear(fc_n, noutputs)  # noutputs = number of capacitance values
 
     def forward(self, x, mesh):
 
